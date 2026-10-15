@@ -1,26 +1,25 @@
-# Uno flag station
+# Uno Flag Station
 
-Firmware for Arduino Uno flag stations: boards that serve `DSU{...}` flags over UART. The station source and the protocols to obtain each flag are intentional and public.
+Firmware for Arduino Uno Flag Station Boards that serve `DSU{...}` flags over UART/Serial. The Station source code and the protocols are intended to be public.
 
-Organizers flash this firmware onto flag stations. Participants connect their own Uno with jumper wires, write firmware that speaks the flag protocols, and collect flags.
+Organizers flash this firmware onto flag stations. Participants connect a Client Uno with jumper wires, write firmware that speaks the flag protocols, and collect flags.
 
 Station logic lives in [`src/main.cpp`](src/main.cpp). Host-side reference clients that speak the same bytes are in [`poc/`](poc/).
 
 ## Wiring
 
-Connect the participant Uno to the flag station with jumper wires on the hardware UART pins (and ground):
+Connect the Client Uno to the flag station with jumper wires on the hardware UART pins (and ground):
 
-| Flag station | Participant |
+| Flag Station | Client |
 |--------------|-------------|
-| TX (pin 1)   | RX (pin 0)  |
-| RX (pin 0)   | TX (pin 1)  |
+| TX (Pin 1)   | RX (Pin 0)  |
+| RX (Pin 0)   | TX (Pin 1)  |
 | GND          | GND         |
-
-Baud rate: 9600.
+| Baud | 9600 |
 
 ```mermaid
 flowchart LR
-  Part[participant Uno] -->|"TX pin 1 → RX pin 0"| Station[flag station]
+  Part[Client Uno] -->|"TX pin 1 → RX pin 0"| Station[Flag Station]
   Station -->|"TX pin 1 → RX pin 0"| Part
   Part ---|GND| Station
 ```
@@ -38,13 +37,15 @@ Pins 0 and 1 are shared with the USB-serial chip. Use USB to flash and power boa
 
 ```mermaid
 flowchart LR
-  Part[participant Uno] -->|"flag number + protocol"| Station[flag station]
-  Station -->|"DSU flag string"| Part
+  Part[Client Uno] -->|"Flag number + Protocol"| Station[Flag Station]
+  Station -->|"{Flag String}"| Part
 ```
 
-## Build and flash
+## Build and Flash
+Firmware can either be compiled using Arduine Web IDE, Arduino IDE, or Platform PIO.
 
-Flags 1–4 are not committed. Put them in a project-root `.env` (gitignored). Placeholders in [`include/flags.h`](include/flags.h) are used if a key is missing. Flag 0 is the exception: its string is written in [`src/main.cpp`](src/main.cpp) on purpose.
+Flags 1–4 are not hardcoded. Put them in a project-root `.env` (gitignored). Placeholders in [`include/flags.h`](include/flags.h) are used if a flag is missing. Alternatively, flags can be set in the flags.h at build time.
+Flag 0 is the exception: it's set in [`src/main.cpp`](src/main.cpp) on purpose.
 
 ```env
 BLINKS=<count>
@@ -69,17 +70,17 @@ pio run -t upload
 pio device monitor -b 9600
 ```
 
-## Obtaining flags
+## Obtaining Flags
 
 Send a flag number (`0`–`4`) followed by a newline, then complete that flag’s protocol. On success the station prints a `DSU{...}` line.
 
-| Flag | Idea |
+| Flag | Concept |
 |------|------|
-| 0 | In the source |
-| 1 | Request only |
-| 2 | Password |
+| 0 | Introduction, Verify Functionality |
+| 1 | Simple Request |
+| 2 | Basic Authentication |
 | 3 | Handshake |
-| 4 | Handshake, LED blinks, count |
+| 4 | Handshake/Call Response |
 
 ### Handshake
 
@@ -89,8 +90,8 @@ Here the exchange is a tiny syn/ack-style dialog over UART—tokens `S`, `A`, an
 
 ```mermaid
 sequenceDiagram
-  participant P as participant
-  participant S as flag station
+  participant P as Client
+  participant S as Flag Station
   rect rgba(70, 130, 180, 0.12)
     Note over P,S: server handshake
     P->>S: S
@@ -103,12 +104,13 @@ When the station acts as server, the participant is the client (diagram above). 
 
 ### Flag 0
 
-Send `0`, then `A`. The station replies `B`. Send `C` and it prints the flag. That string is the literal in `flag0()` in [`src/main.cpp`](src/main.cpp). It is part of the firmware source, not a value from `.env`.
+Send `0`, then `A`. The station replies `B`. Send `C` and it prints the flag. That string is the literal in `flag0()` in [`src/main.cpp`](src/main.cpp). 
+Flag 0 is a hardcoded string meant to verify board functionality.  
 
 ```mermaid
 sequenceDiagram
-  participant P as participant
-  participant S as flag station
+  participant P as Client
+  participant S as Flag Station
   P->>S: 0
   P->>S: A
   S->>P: B
@@ -122,20 +124,20 @@ Request the flag; no further exchange.
 
 ```mermaid
 sequenceDiagram
-  participant P as participant
-  participant S as flag station
+  participant P as Client
+  participant S as Flag Station
   P->>S: 1
   S->>P: FLAG1
 ```
 
 ### Flag 2
 
-Send `2`, then the password line. The station compares it to `hello, world` and prints the flag on a match.
+Send `2`, then the password line. The station expects `hello, world` and prints the flag when they match.
 
 ```mermaid
 sequenceDiagram
-  participant P as participant
-  participant S as flag station
+  participant P as Client
+  participant S as Flag Station
   P->>S: 2
   P->>S: hello, world
   S->>P: FLAG2
@@ -143,12 +145,12 @@ sequenceDiagram
 
 ### Flag 3
 
-Send `3`, then complete one server-side handshake (participant as client). Success unlocks the flag.
+Send `3`, then complete one server-side handshake (participant as client). Success returns the flag.
 
 ```mermaid
 sequenceDiagram
-  participant P as participant
-  participant S as flag station
+  participant P as Client
+  participant S as Flag Station
   P->>S: 3
   rect rgba(70, 130, 180, 0.12)
     Note over P,S: server handshake
@@ -165,46 +167,47 @@ Send `4`, complete a server handshake, watch `LED_BUILTIN` blink, complete a cli
 
 ```mermaid
 sequenceDiagram
-  participant P as participant
-  participant S as flag station
+  participant P as Client
+  participant S as Flag Station
   P->>S: 4
   rect rgba(70, 130, 180, 0.12)
-    Note over P,S: server handshake
+    Note over P,S: Server Handshake
     P->>S: S
     S->>P: A
     P->>S: SA
   end
-  Note over S: blink LED_BUILTIN BLINKS times
+  Note over S: Blinks LED_BUILTIN BLINKS times
+
   rect rgba(70, 130, 180, 0.12)
-    Note over P,S: client handshake
+    Note over P,S: Client Handshake
     S->>P: S
     P->>S: A
     S->>P: SA
   end
-  P->>S: blink count as integer
+  P->>S: Blink Count As Integer
   rect rgba(70, 130, 180, 0.12)
-    Note over P,S: server handshake
+    Note over P,S: Server Handshake
     P->>S: S
     S->>P: A
     P->>S: SA
   end
-  alt count correct
+  alt Count Correct
     S->>P: FLAG4
-  else wrong
+  else Wrong
     S->>P: Incorrect.
   end
 ```
 
-## Reference clients
+## Proof of Concept
 
-POC scripts in [`poc/`](poc/) speak the same protocols over USB serial (default `/dev/ttyACM0` at 9600). Useful for organizers and debugging. The participant path is jumpered Unos; the scripts show the exact byte sequences.
+Proof of concept scripts can be found in [`poc/`](poc/). Uses the same serial protocol over USB (default `/dev/ttyACM0` at 9600). Useful for organizers and debugging. The participant path is jumpered Unos; the scripts show the exact byte sequences.
 
 ## Repository layout
 
 | Path | Role |
 |------|------|
-| `src/main.cpp` | Flag station firmware |
+| `src/main.cpp` | Flag Station Firmware |
 | `include/flags.h` | `FLAG*` / `BLINKS` placeholders |
 | `scripts/env_flags.py` | Injects `.env` into the build |
-| `poc/` | Reference serial clients |
+| `poc/` | Proof Of Concept Code |
 | `platformio.ini` | Uno / PlatformIO config |
